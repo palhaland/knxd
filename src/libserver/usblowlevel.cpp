@@ -321,28 +321,45 @@ USBLowLevelDriver::CompleteSend(struct libusb_transfer *transfer)
 void
 USBLowLevelDriver::write_trigger_cb(ev::async &, int)
 {
-  TRACEPRINTF (t, 10, "SendComplete %lx %d", (unsigned long)sendh, sendh->actual_length);
   if (sendh == nullptr)
-    return;
-  if (sendh->status == LIBUSB_TRANSFER_COMPLETED)
     {
+      // Skip, nothing to do here
+    }
+  else if (sendh->status == LIBUSB_TRANSFER_COMPLETED)
+    {
+      TRACEPRINTF (t, 10, "SendComplete %lx %d", (unsigned long)sendh, sendh->actual_length);
       libusb_free_transfer (sendh);
       send_retry = 0;
       sendh = nullptr;
       send_Next();
-      return;
     }
-  if (sendh->status == LIBUSB_TRANSFER_TIMED_OUT && ++send_retry < 3)
+  else
+  {
+    if (sendh->status == LIBUSB_TRANSFER_CANCELLED)
     {
-      ERRORPRINTF (t, E_WARNING | 122, "SendError %lx timeout, retrying", (unsigned long)sendh);
+      ERRORPRINTF (t, E_ERROR | 35, "SendError %lx Cancelled %d", (unsigned long)sendh, sendh->status);
       libusb_free_transfer (sendh);
       sendh = nullptr;
-      do_send();
-      return;
+      errored(); // TODO probably needs to be an async error
     }
-  ERRORPRINTF (t, E_ERROR | 35, "SendError %lx status %d", (unsigned long)sendh, sendh->status);
-  sendh = nullptr;
-  errored(); // TODO probably needs to be an async error
+    else if (sendh->status == LIBUSB_TRANSFER_TIMED_OUT && ++send_retry < 3)
+    {
+      ERRORPRINTF (t, E_WARNING | 122, "SendError %lx timeout, retrying", (unsigned long)sendh);
+      int res = libusb_submit_transfer (sendh);
+      if (res)
+      {
+        ERRORPRINTF (t, E_ERROR | 37, "Error StartSend: %s", libusb_error_name(res));
+        return;
+      }
+    }
+    else
+    {
+      ERRORPRINTF (t, E_ERROR | 35, "SendError %lx status %d", (unsigned long)sendh, sendh->status);
+      libusb_free_transfer (sendh);
+      sendh = nullptr;
+      errored(); // TODO probably needs to be an async error
+    }
+  }
   return;
 }
 
