@@ -21,6 +21,8 @@
 
 NPDUPtr NPDU::fromPacket (const CArray & c, TracePtr tr)
 {
+  NPDUPtr retpdu = {};
+  return retpdu;
 }
 
 /* N_Data_Individual */

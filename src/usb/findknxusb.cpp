@@ -123,7 +123,11 @@ main ()
       fprintf (stderr, "libusb init failure\n");
       exit (1);
     }
+#if LIBUSB_API_VERSION >= 0x01000106
+  libusb_set_option(context, LIBUSB_OPTION_LOG_LEVEL, 0);
+#else
   libusb_set_debug (context, 0);
+#endif
   printf ("Possible addresses for KNX USB devices:\n");
   count = libusb_get_device_list (context, &devs);
 
