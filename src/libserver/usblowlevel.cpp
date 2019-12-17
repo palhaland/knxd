@@ -335,29 +335,31 @@ USBLowLevelDriver::write_trigger_cb(ev::async &, int)
     }
   else
   {
-    if (sendh->status == LIBUSB_TRANSFER_CANCELLED)
+    if ((sendh->status == LIBUSB_TRANSFER_CANCELLED) ||
+        (sendh->status == LIBUSB_TRANSFER_TIMED_OUT && ++send_retry < 3))
     {
-      ERRORPRINTF (t, E_ERROR | 35, "SendError %lx Cancelled %d", (unsigned long)sendh, sendh->status);
-      libusb_free_transfer (sendh);
-      sendh = nullptr;
-      errored(); // TODO probably needs to be an async error
-    }
-    else if (sendh->status == LIBUSB_TRANSFER_TIMED_OUT && ++send_retry < 3)
-    {
-      ERRORPRINTF (t, E_WARNING | 122, "SendError %lx timeout, retrying", (unsigned long)sendh);
+      if (sendh->status == LIBUSB_TRANSFER_CANCELLED)
+      {
+        ERRORPRINTF (t, E_ERROR | 35, "SendError %lx Cancelled %d", (unsigned long)sendh, sendh->status);
+      }
+      else
+      {
+        ERRORPRINTF (t, E_WARNING | 122, "SendError %lx timeout, retrying", (unsigned long)sendh);
+      }
       int res = libusb_submit_transfer (sendh);
       if (res)
       {
         ERRORPRINTF (t, E_ERROR | 37, "Error StartSend: %s", libusb_error_name(res));
         return;
       }
+      TRACEPRINTF (t, 0, "StartResendSend %lx", (unsigned long)sendh);
     }
     else
     {
       ERRORPRINTF (t, E_ERROR | 35, "SendError %lx status %d", (unsigned long)sendh, sendh->status);
       libusb_free_transfer (sendh);
       sendh = nullptr;
-      errored(); // TODO probably needs to be an async error
+      //errored(); // TODO probably needs to be an async error
     }
   }
   return;
@@ -389,10 +391,9 @@ USBLowLevelDriver::CompleteReceive(struct libusb_transfer *transfer)
 void
 USBLowLevelDriver::read_trigger_cb(ev::async &, int)
 {
-  TRACEPRINTF (t, 10, "RecvComplete %lx %d", (unsigned long) recvh, recvh->actual_length);
   if (recvh == nullptr)
     return;
-
+  TRACEPRINTF (t, 10, "RecvComplete %lx %d", (unsigned long) recvh, recvh->actual_length);
   if (recvh->status != LIBUSB_TRANSFER_COMPLETED)
     {
       ERRORPRINTF (t, E_WARNING | 123, "RecvError %d", recvh->status);
